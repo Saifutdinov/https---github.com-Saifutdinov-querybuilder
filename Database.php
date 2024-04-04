@@ -27,7 +27,7 @@ class Database implements DatabaseInterface
     public function buildQuery(string $query, array $args = []): string
     {
         // если количество параметров не указано вернуть запрос как есть
-        if (count($args) == 0) return $query;
+        if (empty($args)) return $query;
 
         // декомпозиция штоб ее
         $sqlQuery = $this->parseQuery($query, $args);
@@ -70,8 +70,6 @@ class Database implements DatabaseInterface
 
             $result['names'][] = $param;
 
-            var_dump($argtype);
-
             if ($argtype == 'array')
                 if (!in_array($param, $this->assoc))
                     $result['values'][] = implode(", ", array_map(fn ($item) => "`$item`", $args[$key]));
@@ -99,12 +97,10 @@ class Database implements DatabaseInterface
 
     private function buildString(mixed $str, string $subtype): string
     {
-        switch ($subtype) {
-            case 'base':
-                return "'$str'";
-            case 'spec':
-                return "`$str`";
-        }
+        return match ($subtype) {
+            'base' => "'$str'",
+            'spec' => "`$str`"
+        };
     }
 
     private function buildArrayQuery(array $args): array
@@ -121,18 +117,12 @@ class Database implements DatabaseInterface
 
     private function getConvetedValue(mixed $value, string $type, string $subtype): mixed
     {
-        switch ($type) {
-            case 'boolean':
-            case 'integer':
-                return (int)$value;
-            case 'string':
-                return $this->buildString($value, $subtype);
-            case 'float':
-                return (float)$value;
-            case 'NULL':
-                return 'NULL';
-        }
-        return false;
+        return match ($type) {
+            'boolean', 'integer' => (int)$value,
+            'string' => $this->buildString($value, $subtype),
+            'float' => (float)$value,
+            'NULL' => 'NULL'
+        };
     }
 
     private function validateType(string $type, string $param)
