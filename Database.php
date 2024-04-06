@@ -17,7 +17,7 @@ class Database implements DatabaseInterface
 
     private array $types = ['string', 'integer', 'float', 'boolean', 'null'];
 
-    private string $query;
+    private string $skipParam = "SKIP";
 
     public function __construct(?mysqli $mysqli)
     {
@@ -35,9 +35,19 @@ class Database implements DatabaseInterface
         return $sqlQuery;
     }
 
-    public function skip()
+    public function skip(): string
     {
-        // throw new Exception();
+        return $this->skipParam;
+    }
+
+    private function handlerConditionalBlock(string $sqlQuery, array $params): string
+    {
+        if (($pos = strpos($sqlQuery, "{")) === false) return $sqlQuery;
+
+        if (in_array($this->skipParam, $params['values'], true))
+            return substr($sqlQuery, 0, $pos);
+
+        return str_replace(['{', '}'], '', $sqlQuery);
     }
 
     private function parseQuery(string $query, array $args): string
@@ -46,12 +56,10 @@ class Database implements DatabaseInterface
         $pattern = "/\?([#adf])?/";
         $find = preg_match_all($pattern, $query, $matches);
 
-        if (!$find) {
-            return $query;
-        }
+        if (!$find) return $query;
 
         $params = $this->convert($matches[0], $args);
-
+        $query = $this->handlerConditionalBlock($query, $params);
         return $this->replace($query, $params);
     }
 
@@ -70,29 +78,34 @@ class Database implements DatabaseInterface
 
             $result['names'][] = $param;
 
-            if ($argtype == 'array')
-                if (!in_array($param, $this->assoc))
-                    $result['values'][] = implode(", ", array_map(fn ($item) => "`$item`", $args[$key]));
+            if ($args[$key] != 'SKIP')
+                if ($argtype == 'array')
+                    if (!in_array($param, $this->assoc))
+                        $result['values'][] = implode(", ", array_map(fn ($item) => "`$item`", $args[$key]));
+                    else
+                        $result['values'][] = implode(", ", $this->buildArrayQuery($args[$key]));
                 else
-                    $result['values'][] = implode(", ", $this->buildArrayQuery($args[$key]));
+                    $result['values'][] = $this->getConvetedValue($args[$key], $argtype, in_array($param, $this->stringQuotes) ? 'spec' : 'base');
             else
-                $result['values'][] = $this->getConvetedValue($args[$key], $argtype, in_array($param, $this->stringQuotes) ? 'spec' : 'base');
+                $result['values'][] = $args[$key];
         }
         return $result;
     }
 
     private function replace(string $query, array $params): string
     {
-        $replace = function ($search, $replace, $subject) {
-            if (($pos = strpos($subject, $search)) !== false) {
-                return substr_replace($subject, $replace, $pos, strlen($search));
-            }
-            return $subject;
-        };
         foreach ($params['names'] as $i => $param) {
-            $query = $replace($param, $params['values'][$i], $query);
+            $query = $this->replaceIfExists($param, $params['values'][$i], $query);
         }
         return $query;
+    }
+
+    private function replaceIfExists(string $search, string $replace, string $subject): string
+    {
+        if (($pos = strpos($subject, $search)) !== false) {
+            return substr_replace($subject, $replace, $pos, strlen($search));
+        }
+        return $subject;
     }
 
     private function buildString(mixed $str, string $subtype): string
@@ -105,7 +118,7 @@ class Database implements DatabaseInterface
 
     private function buildArrayQuery(array $args): array
     {
-        if ($this->detectSequential($args))
+        if (array_is_list($args))
             return array_values($args);
 
         $result = [];
@@ -134,10 +147,5 @@ class Database implements DatabaseInterface
         ) {
             throw new Exception("variable type error: waiting for $needtype, got $type.");
         }
-    }
-    private function detectSequential(array $args): bool
-    {
-        $keys = array_keys($args);
-        return $keys === array_keys($keys);
     }
 }
