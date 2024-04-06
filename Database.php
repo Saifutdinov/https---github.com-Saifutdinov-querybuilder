@@ -24,6 +24,12 @@ class Database implements DatabaseInterface
         $this->mysqli = $mysqli;
     }
 
+    /**
+     * buildQuery - Метод вернет SQL запрос с подставленными параметрами
+     * @param string $query запрос с параметрами
+     * @param array $args параметры
+     * @return string Готовый $sqlQuery
+     */
     public function buildQuery(string $query, array $args = []): string
     {
         // если количество параметров не указано вернуть запрос как есть
@@ -110,10 +116,10 @@ class Database implements DatabaseInterface
 
     private function buildString(mixed $str, string $subtype): string
     {
-        return match ($subtype) {
+        return $this->escape(match ($subtype) {
             'base' => "'$str'",
             'spec' => "`$str`"
-        };
+        });
     }
 
     private function buildArrayQuery(array $args): array
@@ -147,5 +153,10 @@ class Database implements DatabaseInterface
         ) {
             throw new Exception("variable type error: waiting for $needtype, got $type.");
         }
+    }
+
+    private function escape(string $str): string
+    {
+        return mysqli_real_escape_string($this->mysqli, $str);
     }
 }

@@ -43,6 +43,12 @@ foreach ([null, true] as $block) {
 }
 
 
+// SQL инъекция
+// $dbq->buildQuery(
+//     'SELECT * FROM users WHERE login = ?',
+//     ['\' OR 1=1--']
+// );
+
 $correct = [
     'SELECT name FROM users WHERE user_id = 1',
     'SELECT * FROM users WHERE name = \'Jack\' AND block = 0',
